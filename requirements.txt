@@ -1,0 +1,7 @@
+fastapi
+uvicorn[standard]
+pydantic
+httpx
+redis>=4.2.0
+setuptools
+pydantic-settings>=2.0.0

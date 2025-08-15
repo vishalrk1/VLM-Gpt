@@ -1,0 +1,44 @@
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - vlm-network
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
+    networks:
+      - vlm-network
+
+  worker_1:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./models:/home/appuser/app/models:ro
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - WORKER_PORT=8001
+      - API_ACCESSIBLE_HOSTNAME=worker_1
+      - API_ACCESSIBLE_PORT=8001
+      - MODEL_PATH=/home/appuser/app/models/Qwen2.5-VL-3B-Instruct-Q8_0.gguf
+      - MM_PROJECT_PATH=/home/appuser/app/models/mmproj-Qwen2.5-VL-3B-Instruct-Q8_0.gguf
+    depends_on:
+      - redis
+    networks:
+      - vlm-network
+
+networks:
+  vlm-network:
+    driver: bridge
