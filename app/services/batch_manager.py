@@ -1,134 +1,142 @@
 import asyncio
 import time
-from collections import deque
 import httpx
-from fastapi import HTTPException
+import logging
 
-from app.services.redis_pool import get_redis_pool
+from app.services.redis_pool import redis_queue_manager, get_redis_pool
+
+logger = logging.getLogger(__name__)
 
 BATCH_MAX_SIZE = 4
-BATCH_TIMEOUT = 0.5 # 500ms
+BATCH_TIMEOUT_MS = 500  # 500ms timeout
+PROCESSING_INTERVAL = 0.1  # Check for new requests every 100ms
 
-class BatchRequest:
-    def __init__(self, request_data: dict):
-        self.request_data = request_data
-        self.response_future = asyncio.Future()
-
-class BatchManager:
+class QueueProcessor:
     def __init__(self):
-        self.queue = deque()
-        self.lock = asyncio.Lock()
-        self._background_task = None
-        self._last_batch_time = time.monotonic()
-    
-    async def add_request_to_queue(self, request_data: dict):
-        batch_request = BatchRequest(request_data)
-        async with self.lock:
-            if len(self.queue) == 0:
-                # Reset timer when adding first request to empty queue
-                self._last_batch_time = time.monotonic()
-            self.queue.append(batch_request)
-        return batch_request.response_future
-    
-    async def _send_batch_to_worker(self, batch: list[BatchRequest]):
-        redis = get_redis_pool()
-        worker_url = await redis.brpoplpush('idle_workers', 'busy_workers', timeout=5)
+        self.redis = get_redis_pool()
+        self._processor_task = None
+        self._cleanup_task = None
+        self._running = False
+
+    async def start(self):
+        if not self._processor_task:
+            self._running = True
+            self._processor_task = asyncio.create_task(self._process_queue_loop())
+            self._cleanup_task = asyncio.create_task(self._cleanup_loop())
+            logger.info("Queue processor started with batch processing logic")
+
+    async def stop(self):
+        if self._processor_task:
+            self._running = False
+            self._processor_task.cancel()
+            self._cleanup_task.cancel()
+            try:
+                await self._processor_task
+                await self._cleanup_task
+            except asyncio.CancelledError:
+                pass
+            logger.info("Queue processor stopped")
+
+    async def _process_queue_loop(self):
+        """
+        Main processing loop with dual batch conditions:
+        1. Process when batch reaches BATCH_MAX_SIZE
+        2. Process after BATCH_TIMEOUT_MS even if batch is smaller
+        """
+        while self._running:
+            try:
+                batch = await redis_queue_manager.dequeue_batch_with_timeout(
+                    batch_size=BATCH_MAX_SIZE,
+                    timeout_ms=BATCH_TIMEOUT_MS
+                )
+                
+                if batch:
+                    batch_size = len(batch)
+                    if batch_size == BATCH_MAX_SIZE:
+                        logger.info(f"Processing FULL batch of {batch_size} requests")
+                    else:
+                        logger.info(f"Processing TIMEOUT batch of {batch_size} requests (waited {BATCH_TIMEOUT_MS}ms)")
+                    asyncio.create_task(self._process_batch(batch))
+                await asyncio.sleep(PROCESSING_INTERVAL)
+                
+            except Exception as e:
+                logger.error(f"Error in queue processing loop: {e}")
+                await asyncio.sleep(1)
+
+    async def _cleanup_loop(self):
+        """Cleanup failed requests every 30 seconds"""
+        while self._running:
+            try:
+                await redis_queue_manager.requeue_failed_requests()
+                await asyncio.sleep(30)
+            except Exception as e:
+                logger.error(f"Error in cleanup loop: {e}")
+                await asyncio.sleep(30)
+
+    async def _process_batch(self, batch: list):
+        worker_url = await self.redis.brpoplpush('idle_workers', 'busy_workers', timeout=5)
 
         if not worker_url:
-            exception = HTTPException(503, "Service temporarily unavailable. No workers.")
-            for req in batch:
-                req.response_future.set_exception(exception)
+            logger.warning(f"No workers available, re-queuing {len(batch)} requests")
+            for request in batch:
+                await redis_queue_manager.enqueue_request(request["data"], request["id"])
+                await redis_queue_manager.mark_request_completed(request["id"])
             return
 
-        try: 
-            # Process batch one by one for now (llama.cpp server doesn't support batch completion)
-            results = []
-            for req in batch:
-                formatted_prompt = f"User: {req.request_data['messages'][-1]['content']}\nAssistant:"
+        try:
+            logger.info(f"Worker {worker_url} processing batch of {len(batch)} requests")
+            
+            for request in batch:
+                request_id = request["id"]
+                request_data = request["data"]
                 
-                payload = {
-                    "prompt": formatted_prompt,  # llama.cpp accepts string prompt
-                    "n_predict": 128,
-                    "stop": ["\nUser:", "</s>", "<end_of_turn>"],
-                    "temperature": 0.7,
-                    "top_p": 0.9,
-                    "stream": False,  # Ensure we get complete response
-                    "cache_prompt": True  # Enable prompt caching for better performance
-                }
-
-                async with httpx.AsyncClient(timeout=120) as client:
-                    response = await client.post(f"{worker_url}/completion", json=payload)
-                    response.raise_for_status()
-                    result = response.json()
-                    # llama.cpp returns content field directly in the response
-                    content = result.get('content', '').strip()
+                try:
+                    result = await self._send_to_worker(worker_url, request_data)
+                    await redis_queue_manager.store_result(request_id, result)
+                    logger.info(f"Completed request {request_id}")
                     
-                    # Return the response in a consistent format
-                    results.append({
-                        "content": content,
-                        "model": result.get('model', 'unknown'),
-                        "tokens_predicted": result.get('tokens_predicted', 0),
-                        "tokens_evaluated": result.get('tokens_evaluated', 0),
-                        "stop": result.get('stop', False),
-                        "stop_type": result.get('stop_type', 'unknown')
-                    })
-
-            # Set results for each request in the batch
-            for i, req in enumerate(batch):
-                if i < len(results):
-                    req.response_future.set_result(results[i])
-                else:
-                    # Fallback response if somehow we don't have enough results
-                    req.response_future.set_result({
-                        "content": "",
-                        "model": "unknown",
+                except Exception as e:
+                    logger.error(f"Failed to process request {request_id}: {e}")
+                    error_result = {
+                        "content": f"Error processing request: {str(e)}",
                         "tokens_predicted": 0,
                         "tokens_evaluated": 0,
                         "stop": True,
                         "stop_type": "error"
-                    })
-        except Exception as e:
-            exception = HTTPException(500, f"Worker failed: {str(e)}")
-            for req in batch:
-                if not req.response_future.done():
-                    req.response_future.set_exception(exception)
+                    }
+                    await redis_queue_manager.store_result(request_id, error_result)
+
         finally:
-            await redis.lrem("busy_workers", 1, worker_url)
-            await redis.lpush("idle_workers", worker_url)
-    
-    async def _batch_processor_loop(self):
-        while True:
-            should_process = False
-            current_time = time.monotonic()
+            await self.redis.lrem("busy_workers", 1, worker_url)
+            await self.redis.lpush("idle_workers", worker_url)
+            logger.info(f"Worker {worker_url} returned to idle pool")
+
+    async def _send_to_worker(self, worker_url: str, request_data: dict) -> dict:
+        formatted_prompt = f"User: {request_data['messages'][-1]['content']}\nAssistant:"
+        
+        payload = {
+            "prompt": formatted_prompt,
+            "n_predict": 128,
+            "stop": ["\nUser:", "</s>", "<end_of_turn>"],
+            "temperature": 0.7,
+            "top_p": 0.9,
+            "stream": False,
+            "cache_prompt": True
+        }
+
+        async with httpx.AsyncClient(timeout=120) as client:
+            response = await client.post(f"{worker_url}/completion", json=payload)
+            response.raise_for_status()
+            result = response.json()
             
-            async with self.lock:
-                if len(self.queue) >= BATCH_MAX_SIZE:
-                    should_process = True
-                elif self.queue and (current_time - self._last_batch_time) >= BATCH_TIMEOUT:
-                    should_process = True
-                
-                if should_process:
-                    num_to_process = min(len(self.queue), BATCH_MAX_SIZE)
-                    batch = [self.queue.popleft() for _ in range(num_to_process)]
-                    self._last_batch_time = current_time
-                else:
-                    batch = []
+            content = result.get('content', '').strip()
+            
+            return {
+                "content": content,
+                "tokens_predicted": result.get('tokens_predicted', 0),
+                "tokens_evaluated": result.get('tokens_evaluated', 0),
+                "stop": result.get('stop', False),
+                "stop_type": result.get('stop_type', 'unknown')
+            }
 
-            if batch:
-                asyncio.create_task(self._send_batch_to_worker(batch))
-
-            await asyncio.sleep(0.1)   
-
-    def start(self):
-        if not self._background_task:
-            self._background_task = asyncio.create_task(self._batch_processor_loop())
-    
-    async def stop(self):
-        if self._background_task:
-            self._background_task.cancel()
-            try:
-                await self._background_task
-            except asyncio.CancelledError:
-                pass
-
-batch_manager = BatchManager()
+queue_processor = QueueProcessor()

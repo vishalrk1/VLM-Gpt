@@ -5,16 +5,11 @@ import time
 import signal
 import redis
 
-# --- Configuration ---
 REDIS_URL = os.environ.get("REDIS_URL", "redis://redis:6379")
 MODEL_PATH = os.environ.get("MODEL_PATH")
-# This is the port for the llama-server process INSIDE the container
 WORKER_PORT = os.environ.get("WORKER_PORT")
 
-# --- NEW: Variables for the URL accessible by the API ---
-# This will be 'host.docker.internal' to reach the host
 API_ACCESSIBLE_HOSTNAME = os.environ.get("API_ACCESSIBLE_HOSTNAME")
-# This is the port mapped on the host (e.g., 8001, 8002)
 API_ACCESSIBLE_PORT = os.environ.get("API_ACCESSIBLE_PORT")
 
 
@@ -24,7 +19,6 @@ class LlamaCppWorker:
             print("Error: Missing one or more required environment variables", file=sys.stderr)
             sys.exit(1)
 
-        # The URL to register in Redis is now the one accessible from the host
         self.worker_url = f"http://{API_ACCESSIBLE_HOSTNAME}:{API_ACCESSIBLE_PORT}"
         self.redis_client = redis.from_url(REDIS_URL, decode_responses=True)
         self.llama_process = None

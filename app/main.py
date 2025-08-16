@@ -1,19 +1,28 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, APIRouter
 from fastapi.responses import JSONResponse
+import logging
 
 from app.services.router import router
 from app.services.redis_pool import get_redis_pool
-from app.services.batch_manager import batch_manager
+from app.services.batch_manager import queue_processor  # Import the queue processor
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     redis = get_redis_pool()
     await redis.delete("idle_workers", "busy_workers")
-    batch_manager.start()
+    
+    await queue_processor.start()
+    logger.info("Application started with Redis queue processor")
+    
     yield
-    await batch_manager.stop()
+    
+    await queue_processor.stop()
     await redis.delete("idle_workers", "busy_workers")
+    logger.info("Application stopped")
 
 health_router = APIRouter()
 
@@ -22,9 +31,25 @@ async def health():
     redis = get_redis_pool()
     idle = await redis.llen("idle_workers")
     busy = await redis.llen("busy_workers")
-    if (idle + busy) > 0:
-        return JSONResponse({"status": "ok"})
-    return JSONResponse({"status": "no_workers"}, status_code=503)
+    total_workers = idle + busy
+    
+    if total_workers > 0:
+        return JSONResponse({
+            "status": "ok",
+            "workers": {
+                "idle": idle,
+                "busy": busy,
+                "total": total_workers
+            }
+        })
+    return JSONResponse({
+        "status": "no_workers",
+        "workers": {
+            "idle": 0,
+            "busy": 0,
+            "total": 0
+        }
+    }, status_code=503)
 
 app = FastAPI(lifespan=lifespan)
 app.include_router(router)
