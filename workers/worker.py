@@ -12,7 +12,6 @@ WORKER_PORT = os.environ.get("WORKER_PORT")
 API_ACCESSIBLE_HOSTNAME = os.environ.get("API_ACCESSIBLE_HOSTNAME")
 API_ACCESSIBLE_PORT = os.environ.get("API_ACCESSIBLE_PORT")
 
-
 class LlamaCppWorker:
     def __init__(self):
         if not all([MODEL_PATH, WORKER_PORT, API_ACCESSIBLE_HOSTNAME, API_ACCESSIBLE_PORT]):
@@ -46,6 +45,9 @@ class LlamaCppWorker:
         print("Worker deregistered.")
 
     def start_llama_server(self):
+        gpu_layers = os.environ.get("GPU_LAYERS", "35")
+        gpu_split = os.environ.get("GPU_SPLIT", "1.0")
+        
         command = [
             "llama-server",
             "-m", MODEL_PATH,
@@ -55,14 +57,29 @@ class LlamaCppWorker:
             "--threads", "4",
             "--mlock",
             "--cont-batching",
-            "--batch-size", "512",
+            "--parallel", "8",
+            "--flash-attn",
+            "-ngl", gpu_layers,
+            "--tensor-split", gpu_split,
         ]
         
-        print(f"Starting llama-server internally on port {WORKER_PORT}")
+        mm_proj_path = os.environ.get("MM_PROJECT_PATH")
+        if mm_proj_path and os.path.exists(mm_proj_path):
+            command.extend(["--mmproj", mm_proj_path])
+        
+        print(f"Starting llama-server internally on port {WORKER_PORT} with GPU acceleration")
+        print(f"GPU layers: {gpu_layers}, GPU split: {gpu_split}")
+        print(f"Command: {' '.join(command)}")
+        
+        env = os.environ.copy()
+        env["CUDA_LAUNCH_BLOCKING"] = "0" 
+        env["CUDA_CACHE_DISABLE"] = "0"
+        
         self.llama_process = subprocess.Popen(
             command, 
             stdout=sys.stdout, 
-            stderr=sys.stderr
+            stderr=sys.stderr,
+            env=env
         )
 
     def run(self):

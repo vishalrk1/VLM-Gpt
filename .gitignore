@@ -2,3 +2,8 @@
 **/**/__pycache__/
 models/
 scripts/
+Dockerfile.test
+test_*
+test.py
+llama.cpp/
+build/

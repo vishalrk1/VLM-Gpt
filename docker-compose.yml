@@ -34,12 +34,50 @@ services:
       - API_ACCESSIBLE_PORT=8001
       - MODEL_PATH=/home/appuser/app/models/gemma-3-4b-it-Q4_K_M.gguf
       - MM_PROJECT_PATH=/home/appuser/app/models/ggml-org_gemma-3-4b-it-GGUF_mmproj-model-f16.gguf
-      # - MODEL_PATH=/home/appuser/app/models/Qwen2.5-VL-3B-Instruct-Q8_0.gguf
-      # - MM_PROJECT_PATH=/home/appuser/app/models/mmproj-Qwen2.5-VL-3B-Instruct-Q8_0.gguf
+      - GPU_LAYERS=35
+      - GPU_SPLIT=0.45
+      - CUDA_VISIBLE_DEVICES=0
     depends_on:
       - redis
     networks:
       - vlm-network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  worker_2:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    ports:
+      - "8002:8002"
+    volumes:
+      - ./models:/home/appuser/app/models:ro
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - WORKER_PORT=8002
+      - API_ACCESSIBLE_HOSTNAME=worker_2
+      - API_ACCESSIBLE_PORT=8002
+      - MODEL_PATH=/home/appuser/app/models/gemma-3-4b-it-Q4_K_M.gguf
+      - MM_PROJECT_PATH=/home/appuser/app/models/ggml-org_gemma-3-4b-it-GGUF_mmproj-model-f16.gguf
+      - GPU_LAYERS=35
+      - GPU_SPLIT=0.45
+      - CUDA_VISIBLE_DEVICES=0
+    depends_on:
+      - redis
+    networks:
+      - vlm-network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
 
 networks:
   vlm-network:
