@@ -13,6 +13,11 @@ A scalable, containerized API gateway for local LLMs (GGUF models) with efficien
 
 The system has been tested with comprehensive benchmarks designed for a 2-worker configuration:
 
+### System cofigurations
+- 2-worker setup
+- 16GB Memory used
+- GPU [ Nvidia RTX 3070 ]
+
 ### Benchmark Results Overview
 
 | Test Case | Duration | Requests | Success Rate | RPS | Avg Latency | P95 Latency | Tokens/s |
@@ -36,9 +41,3 @@ The system has been tested with comprehensive benchmarks designed for a 2-worker
 - **Scaling Behavior**: Handles gradual load increases up to 8 req/s with graceful performance degradation
 - **Stress Resilience**: Successfully processes 20 concurrent requests without failures
 - **Token Generation**: Peak performance of 38.4 tokens/second under stress conditions
-
-### Performance Recommendations
-- **Current Configuration**: 2-worker setup demonstrates excellent reliability with 100% success rates
-- **Latency Expectations**: 15-40s average response times for complex multimodal requests depending on load
-- **Optimal Usage**: System performs best with sustained loads rather than burst requests
-- **Scaling Considerations**: Current setup handles moderate concurrent loads effectively; add workers for higher sustained throughput requirements
