@@ -11,7 +11,7 @@ A scalable, containerized API gateway for local LLMs (GGUF models) with efficien
 
 ## System structure
 
-![System Architecture Overview](./architecture.png)
+![System Architecture Overview](./diagrams/architecture.png)
 *Figure: High-level architecture (API layer, Redis, worker pools, GPU nodes).*
 
 ```
