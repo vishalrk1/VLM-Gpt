@@ -5,7 +5,7 @@ import logging
 
 from app.services.router import router
 from app.services.redis_pool import get_redis_pool
-from app.services.batch_manager import queue_processor  # Import the queue processor
+from app.services.batch_manager import queue_processor
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

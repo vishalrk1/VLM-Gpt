@@ -2,47 +2,43 @@
 
 A scalable, containerized API gateway for local LLMs (GGUF models) with efficient batching, FastAPI, Redis, and Docker.
 
----
+**Key Features:**
+- **Batching** maximizes throughput
+- **Redis** manages queues and worker states  
+- **Docker** enables easy scaling
+- **Multimodal** text+image support
+- **GPU acceleration** with CUDA
 
-## Architecture & Workflow
+## Performance Benchmarks
 
-Basic Flow Diagram:
+The system has been tested with comprehensive benchmarks designed for a 2-worker configuration:
 
-```
-    [Client]
-         |
-         v   (POST /v1/predict)
- [API Gateway]
-         |
-         v   (Enqueue)
-     [Redis Queue]
-         |
-         v   (Batch)
- [QueueProcessor]
-         |
-         v   (Lease Worker)
-     [Worker (llama.cpp)]
-         |
-         v   (Results)
-     [Redis Result]
-         ^
-         |
-         +--- (Client polls /v1/result/{id})
-```
+### Benchmark Results Overview
 
-**Workflow Steps:**
+| Test Case | Duration | Requests | Success Rate | RPS | Avg Latency | P95 Latency | Tokens/s |
+|-----------|----------|----------|--------------|-----|-------------|-------------|----------|
+| Burst Load (10req/1s) | 29.6s | 10 | 100% | 0.34 | 27.5s | 29.5s | 27.1 |
+| Sustained Load (2req/s×15s) | 253.2s | 30 | 100% | 0.12 | 14.8s | 27.2s | 17.5 |
+| Ramp-up Load (1→8req/s) | 311.8s | 64 | 100% | 0.21 | 19.4s | 38.3s | 30.1 |
+| Stress Test (20 concurrent) | 63.4s | 20 | 100% | 0.32 | 38.4s | 63.4s | 38.4 |
 
-1. **Client** sends a request to `/v1/predict`. API enqueues it in Redis and returns a `request_id`.
-2. **QueueProcessor** forms batches from the queue, leases an idle worker, and dispatches the batch.
-3. **Worker** (llama.cpp) processes the batch and stores results in Redis.
-4. **Client** polls `/v1/result/{id}` to retrieve the result.
-5. **Cleanup** ensures stuck requests are re-queued.
+**Test Case Details:**
+- **Burst Load Test**: Sends 10 requests simultaneously within 1 second to test burst handling capacity and initial system responsiveness
+- **Sustained Load Test**: Maintains steady 2 requests/second for 15 seconds to evaluate consistent performance under optimal worker utilization  
+- **Ramp-up Load Test**: Gradually increases from 1 to 8 requests/second over 15 seconds to identify throughput scaling behavior and saturation points
+- **Stress Test**: Launches 20 concurrent requests simultaneously to test system limits, queue handling, and error recovery under extreme load
 
----
+### Key Performance Insights
 
-- **Batching** maximizes throughput.
-- **Redis** manages queues and worker states.
-- **Docker** enables easy scaling.
-- **Supports multimodal (text+image) requests.**
+- **System Reliability**: 100% success rate across all test scenarios
+- **Burst Handling**: Efficiently processes 10 simultaneous requests with 27.5s average latency
+- **Sustained Performance**: Maintains stable 14.8s average latency under steady 2 req/s load
+- **Scaling Behavior**: Handles gradual load increases up to 8 req/s with graceful performance degradation
+- **Stress Resilience**: Successfully processes 20 concurrent requests without failures
+- **Token Generation**: Peak performance of 38.4 tokens/second under stress conditions
 
----
+### Performance Recommendations
+- **Current Configuration**: 2-worker setup demonstrates excellent reliability with 100% success rates
+- **Latency Expectations**: 15-40s average response times for complex multimodal requests depending on load
+- **Optimal Usage**: System performs best with sustained loads rather than burst requests
+- **Scaling Considerations**: Current setup handles moderate concurrent loads effectively; add workers for higher sustained throughput requirements

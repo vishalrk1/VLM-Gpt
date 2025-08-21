@@ -135,7 +135,7 @@ class QueueProcessor:
         messages = request_data.get('messages', [])
     
         prompt_parts = []
-        image_data = []  # Store image data for multimodal requests
+        image_data = [] 
         image_id_counter = 1
         
         if system_prompt:
@@ -146,7 +146,6 @@ class QueueProcessor:
             role = message.get('role', 'user')
             content = message.get('content', '')
             
-            # Handle multimodal content
             if isinstance(content, list):
                 text_parts = []
                 for item in content:
@@ -186,7 +185,6 @@ class QueueProcessor:
             "cache_prompt": True
         }
         
-        # Add image data if present (for multimodal requests)
         if image_data:
             payload["image_data"] = image_data
 

@@ -18,6 +18,12 @@ services:
       - redis
     networks:
       - vlm-network
+    deploy:
+      resources:
+        reservations:
+          memory: 256M
+        limits:
+          memory: 1.5G
 
   worker_1:
     build:
@@ -44,10 +50,13 @@ services:
     deploy:
       resources:
         reservations:
+          memory: 4G
           devices:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
+        limits:
+          memory: 8G
 
   worker_2:
     build:
@@ -74,10 +83,13 @@ services:
     deploy:
       resources:
         reservations:
+          memory: 4G
           devices:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
+        limits:
+          memory: 8G
 
 networks:
   vlm-network:
