@@ -9,7 +9,39 @@ A scalable, containerized API gateway for local LLMs (GGUF models) with efficien
 - **Multimodal** text+image support
 - **GPU acceleration** with CUDA
 
-## Performance Benchmarks
+## System structure
+
+![System Architecture Overview](./architecture.png)
+*Figure: High-level architecture (API layer, Redis, worker pools, GPU nodes).*
+
+```
+                    LOAD BALANCER
+                          │
+        ┌─────────────────┼─────────────────┐
+        │                 │                 │
+        ▼                 ▼                 ▼
+   API INSTANCE 1    API INSTANCE 2    API INSTANCE N
+   (Port 8000)       (Port 8001)       (Port 800N)
+        │                 │                 │
+        └─────────────────┼─────────────────┘
+                          │
+                    REDIS CLUSTER
+                          │
+        ┌─────────────────┼─────────────────┐
+        │                 │                 │
+        ▼                 ▼                 ▼
+   WORKER POOL 1     WORKER POOL 2     WORKER POOL N
+   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐
+   │ Worker 1.1  │   │ Worker 2.1  │   │ Worker N.1  │
+   │ Worker 1.2  │   │ Worker 2.2  │   │ Worker N.2  │
+   │ Worker 1.M  │   │ Worker 2.M  │   │ Worker N.M  │
+   └─────────────┘   └─────────────┘   └─────────────┘
+        │                 │                 │
+        ▼                 ▼                 ▼
+    GPU NODE 1        GPU NODE 2        GPU NODE N
+```
+
+## Performance Benchmarksss
 
 The system has been tested with comprehensive benchmarks designed for a 2-worker configuration:
 
@@ -18,7 +50,7 @@ The system has been tested with comprehensive benchmarks designed for a 2-worker
 - 16GB Memory used
 - GPU [ Nvidia RTX 3070 ]
 
-### Benchmark Results Overview
+### Benchmark Results Overview for Gemma-3 4B
 
 | Test Case | Duration | Requests | Success Rate | RPS | Avg Latency | P95 Latency | Tokens/s |
 |-----------|----------|----------|--------------|-----|-------------|-------------|----------|
