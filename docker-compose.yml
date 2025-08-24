@@ -38,7 +38,7 @@ services:
       - WORKER_PORT=8001
       - API_ACCESSIBLE_HOSTNAME=worker_1
       - API_ACCESSIBLE_PORT=8001
-      - MODEL_PATH=/home/appuser/app/models/gemma-3-4b-it-Q4_K_M.gguf
+      - MODEL_PATH=/home/appuser/app/models/ggml-org_gemma-3-4b-it-GGUF_gemma-3-4b-it-Q4_K_M.gguf
       - MM_PROJECT_PATH=/home/appuser/app/models/ggml-org_gemma-3-4b-it-GGUF_mmproj-model-f16.gguf
       - GPU_LAYERS=35
       - GPU_SPLIT=0.45
@@ -71,7 +71,7 @@ services:
       - WORKER_PORT=8002
       - API_ACCESSIBLE_HOSTNAME=worker_2
       - API_ACCESSIBLE_PORT=8002
-      - MODEL_PATH=/home/appuser/app/models/gemma-3-4b-it-Q4_K_M.gguf
+      - MODEL_PATH=/home/appuser/app/models/ggml-org_gemma-3-4b-it-GGUF_gemma-3-4b-it-Q4_K_M.gguf
       - MM_PROJECT_PATH=/home/appuser/app/models/ggml-org_gemma-3-4b-it-GGUF_mmproj-model-f16.gguf
       - GPU_LAYERS=35
       - GPU_SPLIT=0.45
