@@ -13,33 +13,7 @@ A scalable, containerized API gateway for local LLMs (GGUF models) with efficien
 
 ![System Architecture Overview](./diagrams/architecture.png)
 *Figure: High-level architecture (API layer, Redis, worker pools, GPU nodes).*
-
-```
-                    LOAD BALANCER
-                          │
-        ┌─────────────────┼─────────────────┐
-        │                 │                 │
-        ▼                 ▼                 ▼
-   API INSTANCE 1    API INSTANCE 2    API INSTANCE N
-   (Port 8000)       (Port 8001)       (Port 800N)
-        │                 │                 │
-        └─────────────────┼─────────────────┘
-                          │
-                    REDIS CLUSTER
-                          │
-        ┌─────────────────┼─────────────────┐
-        │                 │                 │
-        ▼                 ▼                 ▼
-   WORKER POOL 1     WORKER POOL 2     WORKER POOL N
-   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐
-   │ Worker 1.1  │   │ Worker 2.1  │   │ Worker N.1  │
-   │ Worker 1.2  │   │ Worker 2.2  │   │ Worker N.2  │
-   │ Worker 1.M  │   │ Worker 2.M  │   │ Worker N.M  │
-   └─────────────┘   └─────────────┘   └─────────────┘
-        │                 │                 │
-        ▼                 ▼                 ▼
-    GPU NODE 1        GPU NODE 2        GPU NODE N
-```
+<img width="935" height="555" alt="image" src="https://github.com/user-attachments/assets/48e9f6db-eebf-4c48-8963-3262dbfb41cd" />
 
 ## Performance Benchmarks
 
